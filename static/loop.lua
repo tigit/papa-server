@@ -5,26 +5,32 @@ loop = {
 }
 
 function loop:__on_update_file(file, key, ret)
+    print('loop:__on_update_file ' .. file .. ', ' .. tostring(ret))
+
     local f = self._file_list[file]
     if 3 == f.s and cfile.check(file, f.s, f.v) then
         f.s = 4
     else 
         f.s = 0 
-        f.e = f.e + 1
+        f.e = (f.e or 0) + 1
     end
 end
 
 function loop:__update_file(file)
+    print('loop:__update_file ' .. file)
+
     local f = self._file_list[file]
     if cfile.check(file, f.s, f.v) then
         f.s = 4
     else
-        chttp:file(DATA.config.static_url . file, file, f.v, function(...) self:__on_update_file(file, ...) end)
+        chttp:file(DATA.config.static_url .. file, file, f.v, function(...) self:__on_update_file(file, ...) end)
         f.s = 3
     end
 end
 
 function loop:__on_fetch_file(file, key, ret)
+    print('loop:__on_fetch_file ' .. file .. ', ' .. ret)
+
     local e = true
 
     local r = cjson.decode(ret)
@@ -41,7 +47,7 @@ function loop:__on_fetch_file(file, key, ret)
 
     if e then
         local f = self._file_list[file]
-        f.s = 0 f.e = f.e + 1
+        f.s = 0 f.e = (f.e or 0) + 1
     end
 end
 
@@ -51,20 +57,22 @@ function loop:__check_file()
             chttp:post(DATA.config.server_url, cjson.encode({tick = "file_info", data = k}), function(...) self:__on_fetch_file(k, ...) end)
             v.s = 1
         elseif 2 == v.s then
-            self:__update_file(v)
+            self:__update_file(k)
         end
     end
 end
 
 function loop:__on_fetch_task(task, key, ret)
+    print('loop:__on_fetch_task ' .. task .. ', ' .. tostring(ret))
     local e = true
 
     local r = cjson.decode(ret)
-    if r and r.f then
+    if r then
         for k,v in pairs(r) do
+            print('loop:__on_fetch_task 1 ' .. k .. ', ' .. tostring(v))
             local t = self._task_list[k]
             if not t or t.v ~= v.v then
-                for k1,v1 in pairs(r.f) do
+                for k1,v1 in pairs(v.f) do
                     if not self._file_list[v1] then
                         self._file_list[v1] = {}
                     end
@@ -78,7 +86,7 @@ function loop:__on_fetch_task(task, key, ret)
 
     if e then
         local t = self._task_list[task]
-        t.s = 0 t.e = t.e + 1
+        t.s = 0 t.e = (t.e or 0) + 1
     end
 end
 
@@ -96,24 +104,25 @@ end
 
 function loop:__check_task()
     for k,v in pairs(self._task_list) do 
+        print('loop:__check_task ' .. k)
         if not v.c then
-            if 0 == v.s then
-                chttp:post(DATA.config.server_url, cjson.encode({tick = "task_info", data = k}), function(...) self:__fetch_task(k, ...) end)
+            if not v.s or 0 == v.s then
+                chttp:post(DATA.config.server_url, cjson.encode({tick = "task_info", data = k}), function(...) self:__on_fetch_task(k, ...) end)
                 v.s = 1
             elseif 2 == v.s then
                 local ok = true
-                for k,v in pairs(v.i.r) do
-                    local f = self._file_list[v.p]
+                for k,v in pairs(v.f) do
+                    local f = self._file_list[v]
                     if not f.s or 3 ~= f.s then
                         ok = false
                         break
                     end
                 end
                 if ok then
-                    v.c = loadfile(HOME . v.i.t)
+                    v.c = loadfile(HOME .. v.f[1])
                     if not v.c then
                         v.s = 0
-                        v.e = v.e + 1
+                        v.e = (v.e or 0) + 1
                     else
                         self:__resume_task(task)
                     end
@@ -141,11 +150,15 @@ function loop:__run_task(list, task, data)
 end
 
 function loop:start()
+    print('loop:start ')
+
     self._file_list = {}
 
 	self._task_list = {}
     self._push_list = {}
     self._post_list = {}
+
+    self:push('task/ping')
 end
 
 function loop:stop()
@@ -165,6 +178,11 @@ function loop:stop()
 end
 
 function loop:update()
+    print('loop:update')
+
+    self:__check_file()
+    self:__check_task()
+
     local time = os.time()
 
     local h = self._push_list[1]
