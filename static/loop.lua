@@ -1,53 +1,56 @@
 loop = {
-    _TS_FINE = 0,
-    _TS_DONE = 1,
-    _TS_EXIT = 2
+    TS_FINE = 0,
+    TS_DONE = 1,
+    TS_EXIT = 2
 }
 
 function loop:__on_update_file(file, key, ret)
-    print('loop:__on_update_file ' .. file .. ', ' .. tostring(ret))
-
     local f = self._file_list[file]
-    if 3 == f.s and cfile.check(file, f.s, f.v) then
+    if 3 == f.s and cfile.check(file, f.i.s, f.i.v) then
+        print('loop:__on_update_file 1 ' .. file)
         f.s = 4
     else 
+        print('loop:__on_update_file 2 ' .. file)
         f.s = 0 
         f.e = (f.e or 0) + 1
     end
 end
 
 function loop:__update_file(file)
-    print('loop:__update_file ' .. file)
-
     local f = self._file_list[file]
-    if cfile.check(file, f.s, f.v) then
+    if cfile.check(file, f.i.s, f.i.v) then
+        print('loop:__update_file 1 ' .. file)
         f.s = 4
     else
-        chttp:file(DATA.config.static_url .. file, file, f.v, function(...) self:__on_update_file(file, ...) end)
+        print('loop:__update_file 2 ' .. file)
+        chttp:file(DATA.config.static_url .. file, file, f.i.v, function(...) self:__on_update_file(file, ...) end)
         f.s = 3
     end
 end
 
 function loop:__on_fetch_file(file, key, ret)
-    print('loop:__on_fetch_file ' .. file .. ', ' .. ret)
-
-    local e = true
+    print('loop:__on_fetch_file 1 ' .. file .. ', ' .. ret)
 
     local r = cjson.decode(ret)
     if r then
         for k,v in pairs(r) do
             local f = self._file_list[k]
-            if not f or v.v ~= f.v or v.s ~= f.s then
-                self._file_list[k] = v e = false
-            elseif k == file then
-                f.s = 2 e = false
+            if not f then
+                f = {} 
+                self._file_list[k] = f
+            end
+            if not f.i or v.v ~= f.i.v or v.s ~= f.i.s then
+                f.s = 2 f.i = v
             end
         end
     end
 
-    if e then
-        local f = self._file_list[file]
+    local f = self._file_list[file]
+    if 1 == f.s then
+        print('loop:__on_fetch_file 2 ' .. file)
         f.s = 0 f.e = (f.e or 0) + 1
+    else
+        print('loop:__on_fetch_file 3 ' .. file)
     end
 end
 
@@ -63,37 +66,46 @@ function loop:__check_file()
 end
 
 function loop:__on_fetch_task(task, key, ret)
-    print('loop:__on_fetch_task ' .. task .. ', ' .. tostring(ret))
-    local e = true
+    print('loop:__on_fetch_task 1 ' .. task .. ', ' .. tostring(ret))
 
     local r = cjson.decode(ret)
     if r then
         for k,v in pairs(r) do
-            print('loop:__on_fetch_task 1 ' .. k .. ', ' .. tostring(v))
+            print('loop:__on_fetch_task 2 ' .. k)
             local t = self._task_list[k]
-            if not t or t.v ~= v.v then
+            if not t then
+                t = {}
+                self._task_list[k] = t
+            end
+            if not t.i or t.i.v ~= v.v then
+                t.i = v
                 for k1,v1 in pairs(v.f) do
                     if not self._file_list[v1] then
                         self._file_list[v1] = {}
                     end
                 end
-                self._task_list[k] = v e = false
-            elseif k == task then
-                t.s = 2 e = false
+                t.s = 2 
             end
         end
     end
 
-    if e then
-        local t = self._task_list[task]
+    local t = self._task_list[task]
+    if 1 == t.s then
+        print('loop:__on_fetch_task 2 ' .. task)
         t.s = 0 t.e = (t.e or 0) + 1
+    else
+        print('loop:__on_fetch_task 3 ' .. task)
     end
 end
 
 function loop:__resume_task(task)
-    if task.l then
-        for k,v in pairs(task.l) do
-            local r = task.c()
+    print('loop:__resume_task ' .. task)
+
+    local t = self._task_list[task]
+
+    if t.l then
+        for k,v in pairs(t.l) do
+            local r = t.c()
             table.insert(v.t, { r = r })
             if r.start then
                 r:start(v.d)
@@ -104,27 +116,25 @@ end
 
 function loop:__check_task()
     for k,v in pairs(self._task_list) do 
-        print('loop:__check_task ' .. k)
         if not v.c then
             if not v.s or 0 == v.s then
                 chttp:post(DATA.config.server_url, cjson.encode({tick = "task_info", data = k}), function(...) self:__on_fetch_task(k, ...) end)
                 v.s = 1
             elseif 2 == v.s then
                 local ok = true
-                for k,v in pairs(v.f) do
-                    local f = self._file_list[v]
-                    if not f.s or 3 ~= f.s then
-                        ok = false
-                        break
+                for k1,v1 in pairs(v.i.f) do
+                    local f = self._file_list[v1]
+                    if not f.s or 4 ~= f.s then
+                        ok = false break
                     end
                 end
                 if ok then
-                    v.c = loadfile(HOME .. v.f[1])
+                    print('loop:__check_task 1 ' .. k)
+                    v.c = loadfile(HOME .. v.i.f[1])
                     if not v.c then
-                        v.s = 0
-                        v.e = (v.e or 0) + 1
+                        v.s = 0 v.e = (v.e or 0) + 1
                     else
-                        self:__resume_task(task)
+                        self:__resume_task(k)
                     end
                 end
             end
@@ -158,7 +168,7 @@ function loop:start()
     self._push_list = {}
     self._post_list = {}
 
-    self:push('task/ping')
+    self:push('task/ping', 'test')
 end
 
 function loop:stop()
@@ -188,12 +198,12 @@ function loop:update()
     local h = self._push_list[1]
     if h and h.r.update then
         local st = h.r:update(time)
-        if self._TS_FINE ~= st then
+        if self.TS_FINE ~= st then
             if h.r.stop then
                 h.r:stop()
             end
             table.remove(self._push_list, 1)
-            if self._TS_EXIT == st then
+            if self.TS_EXIT == st then
                 bind:call('loop.restart')
             end
         end
@@ -202,16 +212,16 @@ function loop:update()
     for i = #self._post_list, 1, -1 do
         local t = self._post_list[i]
         if not t then
-            local st = self._TS_DONE
+            local st = self.TS_DONE
             if t.r.update then
                 st = t.r:update(time)
             end
-            if self._TS_FINE ~= st then
+            if self.TS_FINE ~= st then
                 if t.r.stop then
                     t.r:stop()
                 end
                 table.remove(self._post_list, i)
-                if self._TS_EXIT == st then
+                if self.TS_EXIT == st then
                     bind:call('loop.restart')
                 end
             end
