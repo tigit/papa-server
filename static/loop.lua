@@ -188,7 +188,7 @@ function loop:stop()
 end
 
 function loop:update()
-    print('loop:update')
+    -- print('loop:update')
 
     self:__check_file()
     self:__check_task()

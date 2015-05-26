@@ -1,11 +1,12 @@
 function handle(data)
-    ngx.say(cjson.encode(
+    local file = data .. '.lua'
+    local attr = lfs.attributes('./server/static/' .. file)
+    return ngx.say(cjson.encode(
     {
-        ['task/ping'] = {
-            v = 1,
+        [data] = {
+            v = attr.modification,
             f = {
-                [1] = 'task/ping.lua',
-                [2] = 'task/test.lua',
+                [1] = file,
             }
         },
     }

@@ -6,7 +6,7 @@ function ping:start(data)
 end
 
 function ping:update(time)
-    print('ping:update ' .. tostring(time))
+    -- print('ping:update ' .. tostring(time))
     return loop.TS_FINE
 end
 
