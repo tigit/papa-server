@@ -1,16 +1,51 @@
+cfile.lpush('http://server.papa.wuk.org:8080/log')
+
+log = {}
+
+function log:__log(lv, ...)
+    local l = 'L'
+    for i=1, select("#", ...) do
+        l = l .. '\t' .. tostring(select(i, ...))
+    end
+    cfile.log(lv, l)
+end
+
+function log:debug(...)
+    self:__log(0, ...)
+end
+
+function log:info(...)
+    self:__log(1, ...)
+end
+
+function log:warn(...)
+    self:__log(2, ...)
+end
+
+function log:error(...)
+    self:__log(3, ...)
+end
+
+function log:fatal(...)
+    self:__log(4, ...)
+end
+
 loop = {
     TS_FINE = 0,
     TS_DONE = 1,
-    TS_EXIT = 2
+    TS_EXIT = 2,
+
+    MAX_FILE = 3,
+    MAX_ERROR = 3,
 }
 
 function loop:__on_update_file(file, key, ret)
     local f = self._file_list[file]
     if 3 == f.s and cfile.check(file, f.i.s, f.i.v) then
-        print('loop:__on_update_file 1 ' .. file)
+        log:debug('loop', '__on_update_file', file)
         f.s = 4
     else 
-        print('loop:__on_update_file 2 ' .. file)
+        log:debug('loop', '__on_update_file 2', file)
         f.s = 0 
         f.e = (f.e or 0) + 1
     end
@@ -19,17 +54,17 @@ end
 function loop:__update_file(file)
     local f = self._file_list[file]
     if cfile.check(file, f.i.s, f.i.v) then
-        print('loop:__update_file 1 ' .. file)
+        log:debug('loop', '__update_file 1', file)
         f.s = 4
     else
-        print('loop:__update_file 2 ' .. file)
-        chttp:file(DATA.config.static_url .. file, file, f.i.v, function(...) self:__on_update_file(file, ...) end)
+        log:debug('loop', '__update_file 2', file)
+        chttp:fget(DATA.config.static_url .. file, file, f.i.v, function(...) self:__on_update_file(file, ...) end)
         f.s = 3
     end
 end
 
 function loop:__on_fetch_file(file, key, ret)
-    print('loop:__on_fetch_file 1 ' .. file .. ', ' .. ret)
+    log:debug('loop', '__on_fetch_file 1', file, ret)
 
     local r = cjson.decode(ret)
     if r then
@@ -40,25 +75,29 @@ function loop:__on_fetch_file(file, key, ret)
                 self._file_list[k] = f
             end
             if not f.i or v.v ~= f.i.v or v.s ~= f.i.s then
-                f.s = 2 f.i = v
+                f.s = f.s and 2 f.i = v
             end
         end
     end
 
     local f = self._file_list[file]
     if 1 == f.s then
-        print('loop:__on_fetch_file 2 ' .. file)
+        log:debug('loop', '__on_fetch_file 2', file)
         f.s = 0 f.e = (f.e or 0) + 1
     else
-        print('loop:__on_fetch_file 3 ' .. file)
+        log:debug('loop', '__on_fetch_file 3', file)
     end
 end
 
 function loop:__check_file()
     for k,v in pairs(self._file_list) do 
-        if not v.s or 0 == v.s then
+        if 0 == v.s then
             chttp:post(DATA.config.server_url, cjson.encode({tick = "file_info", data = k}), function(...) self:__on_fetch_file(k, ...) end)
             v.s = 1
+        elseif 1 == v.s then
+            if v.e and v.e > self.MAX_ERROR then
+                log:debug('loop', '__check_file 1', file)
+            end
         elseif 2 == v.s then
             self:__update_file(k)
         end
@@ -66,12 +105,12 @@ function loop:__check_file()
 end
 
 function loop:__on_fetch_task(task, key, ret)
-    print('loop:__on_fetch_task 1 ' .. task .. ', ' .. tostring(ret))
+    log:debug('loop', '__on_fetch_task 1', task, ret)
 
     local r = cjson.decode(ret)
     if r then
         for k,v in pairs(r) do
-            print('loop:__on_fetch_task 2 ' .. k)
+            log:debug('loop', '__on_fetch_task 2', k)
             local t = self._task_list[k]
             if not t then
                 t = {}
@@ -80,9 +119,12 @@ function loop:__on_fetch_task(task, key, ret)
             if not t.i or t.i.v ~= v.v then
                 t.i = v
                 for k1,v1 in pairs(v.f) do
-                    if not self._file_list[v1] then
-                        self._file_list[v1] = {}
+                    local f = self._file_list[v1]
+                    if not f then
+                        f = {}
+                        self._file_list[v1] = f
                     end
+                    f.s = f.s or (f.i and 2 or 0)
                 end
                 t.s = 2 
             end
@@ -91,15 +133,15 @@ function loop:__on_fetch_task(task, key, ret)
 
     local t = self._task_list[task]
     if 1 == t.s then
-        print('loop:__on_fetch_task 2 ' .. task)
+        log:debug('loop', '__on_fetch_task 2', task)
         t.s = 0 t.e = (t.e or 0) + 1
     else
-        print('loop:__on_fetch_task 3 ' .. task)
+        log:debug('loop', '__on_fetch_task 3', task)
     end
 end
 
 function loop:__resume_task(task)
-    print('loop:__resume_task ' .. task)
+    log:debug('loop', '__resume_task', task)
 
     local t = self._task_list[task]
 
@@ -129,7 +171,7 @@ function loop:__check_task()
                     end
                 end
                 if ok then
-                    print('loop:__check_task 1 ' .. k)
+                    log:debug('loop', '__check_task 1', k)
                     v.c = loadfile(HOME .. v.i.f[1])
                     if not v.c then
                         v.s = 0 v.e = (v.e or 0) + 1
@@ -160,7 +202,7 @@ function loop:__run_task(list, task, data)
 end
 
 function loop:start()
-    print('loop:start ')
+    log:debug('loop', 'start')
 
     self._file_list = {}
 
@@ -188,8 +230,6 @@ function loop:stop()
 end
 
 function loop:update()
-    -- print('loop:update')
-
     self:__check_file()
     self:__check_task()
 
