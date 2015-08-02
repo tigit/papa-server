@@ -140,22 +140,6 @@ function loop:__on_fetch_task(task, key, ret)
     end
 end
 
-function loop:__resume_task(task)
-    log:debug('loop', '__resume_task', task)
-
-    local t = self._task_list[task]
-
-    if t.l then
-        for k,v in pairs(t.l) do
-            local r = t.c()
-            table.insert(v.t, { r = r })
-            if r.start then
-                r:start(v.d)
-            end
-        end
-    end
-end
-
 function loop:__check_task()
     for k,v in pairs(self._task_list) do 
         if not v.c then
@@ -179,6 +163,22 @@ function loop:__check_task()
                         self:__resume_task(k)
                     end
                 end
+            end
+        end
+    end
+end
+
+function loop:__resume_task(task)
+    log:debug('loop', '__resume_task', task)
+
+    local t = self._task_list[task]
+
+    if t.l then
+        for k,v in pairs(t.l) do
+            local r = t.c()
+            table.insert(v.t, { r = r })
+            if r.start then
+                r:start(v.d)
             end
         end
     end
