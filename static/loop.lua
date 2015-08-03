@@ -1,4 +1,4 @@
-cfile.lpush('http://server.papa.wuk.org:8080/log')
+cfile.lpush('http://server.thedawens.net:8080/log')
 
 log = {}
 
@@ -58,7 +58,7 @@ function loop:__update_file(file)
         f.s = 4
     else
         log:debug('loop', '__update_file 2', file)
-        chttp:fget(DATA.config.static_url .. file, file, f.i.v, function(...) self:__on_update_file(file, ...) end)
+        chttp:fget(cdata.pkg.config.static_url .. file, file, f.i.v, function(...) self:__on_update_file(file, ...) end)
         f.s = 3
     end
 end
@@ -92,7 +92,7 @@ end
 function loop:__check_file()
     for k,v in pairs(self._file_list) do 
         if 0 == v.s then
-            chttp:post(DATA.config.server_url, cjson.encode({tick = "file_info", data = k}), function(...) self:__on_fetch_file(k, ...) end)
+            chttp:post(cdata.pkg.config.server_url, cjson.encode({tick = "file_info", data = k}), function(...) self:__on_fetch_file(k, ...) end)
             v.s = 1
         elseif 1 == v.s then
             if v.e and v.e > self.MAX_ERROR then
@@ -144,7 +144,7 @@ function loop:__check_task()
     for k,v in pairs(self._task_list) do 
         if not v.c then
             if not v.s or 0 == v.s then
-                chttp:post(DATA.config.server_url, cjson.encode({tick = "task_info", data = k}), function(...) self:__on_fetch_task(k, ...) end)
+                chttp:post(cdata.pkg.config.server_url, cjson.encode({tick = "task_info", data = k}), function(...) self:__on_fetch_task(k, ...) end)
                 v.s = 1
             elseif 2 == v.s then
                 local ok = true
