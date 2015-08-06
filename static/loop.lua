@@ -48,6 +48,7 @@ function loop:__on_update_file(file, key, ret)
         log:debug('loop', '__on_update_file 2', file)
         f.s = 0 
         f.e = (f.e or 0) + 1
+        assert(f.e < self.MAX_ERROR, 'update file data error, ' .. file)
     end
 end
 
@@ -84,6 +85,7 @@ function loop:__on_fetch_file(file, key, ret)
     if 1 == f.s then
         log:debug('loop', '__on_fetch_file 2', file)
         f.s = 0 f.e = (f.e or 0) + 1
+        assert(f.e < self.MAX_ERROR, 'fetch file info error, ' .. file)
     else
         log:debug('loop', '__on_fetch_file 3', file)
     end
@@ -94,10 +96,6 @@ function loop:__check_file()
         if 0 == v.s then
             chttp:post(cdata.pkg.config.server_url, cjson.encode({tick = "file_info", data = k}), function(...) self:__on_fetch_file(k, ...) end)
             v.s = 1
-        elseif 1 == v.s then
-            if v.e and v.e > self.MAX_ERROR then
-                log:debug('loop', '__check_file 1', file)
-            end
         elseif 2 == v.s then
             self:__update_file(k)
         end
@@ -135,6 +133,7 @@ function loop:__on_fetch_task(task, key, ret)
     if 1 == t.s then
         log:debug('loop', '__on_fetch_task 2', task)
         t.s = 0 t.e = (t.e or 0) + 1
+        assert(t.e < self.MAX_ERROR, 'fetch task info error, ' .. task)
     else
         log:debug('loop', '__on_fetch_task 3', task)
     end
@@ -159,6 +158,7 @@ function loop:__check_task()
                     v.c = loadfile(HOME .. v.i.f[1])
                     if not v.c then
                         v.s = 0 v.e = (v.e or 0) + 1
+                        assert(v.e < self.MAX_ERROR, 'parse task code error, ' .. k)
                     else
                         self:__resume_task(k)
                     end
