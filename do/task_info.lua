@@ -1,6 +1,6 @@
 function handle(data)
     local file = data .. '.lua'
-    local attr = lfs.attributes('./server/static/' .. file)
+    local attr = lfs.attributes('/data/www/static/daemon/' .. file)
     return ngx.say(cjson.encode(
     {
         [data] = {
