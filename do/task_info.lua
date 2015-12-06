@@ -1,13 +1,13 @@
-function handle(data)
-    local file = data .. '.lua'
-    local attr = lfs.attributes('/data/www/static/daemon/' .. file)
+local function handle(data)
+    local file = 'src/' .. data .. '.lua'
+    local attr = lfs.attributes(sdata.dir_static .. '/' .. file)
+    local list = {}
+    sutil:fwalk(list, file)
     return ngx.say(cjson.encode(
     {
         [data] = {
             v = attr.modification,
-            f = {
-                [1] = file,
-            }
+            f = list,
         },
     }
     ))
